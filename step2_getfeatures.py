@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import warnings
 import datetime
@@ -42,7 +41,9 @@ def calcMoldes(mol):
 
     return df_des
 
-
+# """
+# generate the ML features
+# """
 fea_dict = [x[0] for x in Descriptors._descList]
 df_feature = pd.DataFrame(columns=fea_dict)
 for mol in tqdm(mols, desc="Calculating",
