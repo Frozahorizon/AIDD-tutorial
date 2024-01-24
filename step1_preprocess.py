@@ -55,6 +55,16 @@ activity = activity.astype(np.float32)
 df_activity = pd.DataFrame(activity)
 print(df_activity.head())
 
+binary_activity = []
+for a in activity:
+    if a >= 6.0:
+        binary_activity.append(1.0)
+    else:
+        binary_activity.append(0.0)
+
+df_binary = pd.DataFrame(binary_activity, columns=['activity label'])
+df_binary.to_csv('./output_file/binary_activity.csv', index=False)
+
 if normal_method == 'Standard':
     scaler = StandardScaler()
     activity = scaler.fit_transform(df_activity)

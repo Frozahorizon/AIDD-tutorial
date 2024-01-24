@@ -53,7 +53,7 @@ for mol in tqdm(mols, desc="Calculating",
 
 df_feature.index = range(len(df_feature))
 
-df_feature.to_csv('./output_file/features_rdkit.csv')
+df_feature.to_csv('./output_file/features_rdkit.csv', index=False)
 
 end_time = datetime.datetime.now()
 print('End running，time：', end_time.strftime('%Y-%m-%d %H:%M:%S'))
