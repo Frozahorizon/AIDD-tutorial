@@ -1,7 +1,7 @@
 import os
-import itertools
 import pickle
 import warnings
+import itertools
 import datetime
 import numpy as np
 import pandas as pd
@@ -9,12 +9,8 @@ import matplotlib.pyplot as plt
 from sklearn.inspection import permutation_importance
 from sklearn.preprocessing import label_binarize
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.ensemble import AdaBoostClassifier
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import roc_curve, auc, plot_roc_curve
@@ -30,6 +26,7 @@ param_grid = {'n_estimators': n_estimators,
 
 scores = ['precision', 'recall']
 
+class_names = ['inactive drug', 'active drug']
 # record time
 start_time = datetime.datetime.now()
 print('Start running，time：', start_time.strftime('%Y-%m-%d %H:%M:%S'))
@@ -37,6 +34,13 @@ print('Start running，time：', start_time.strftime('%Y-%m-%d %H:%M:%S'))
 # input data
 features = pd.read_csv('../output_file/maccs.csv')
 target = pd.read_csv('../output_file/binary_activity.csv')
+target = label_binarize(target, classes=[0., 1.])
+
+################################################
+try:
+    os.makedirs('RF_output')
+except FileExistsError:
+    pass
 
 
 ################################################
@@ -90,7 +94,43 @@ def parameter_optimization(features, target, m_scores=scores, parameter_grid=par
         print()
 
 
+parameter_optimization(features=features, target=target)
+
+
+################################################
+def plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, cm[i, j],
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+    plt.tight_layout()
+    plt.ylabel('real label')
+    plt.xlabel('predictive label')
+    plt.show()
+
+
+################################################
 def rf_model(features, target, n_model=500, tree_depth=10):
+    # Training model
     X_train, X_test, y_train, y_test = partition(feature_data=features, target_data=target)
     random_seed = np.random.RandomState(0)
     classifier = RandomForestClassifier(n_estimators=n_model,
@@ -99,7 +139,7 @@ def rf_model(features, target, n_model=500, tree_depth=10):
     classifier.fit(X_train, y_train)
     print("Accuracy on test set: {:.2f}".format(classifier.score(X_test, y_test)))
 
-    with open('RF_model.pkl', 'wb') as file:
+    with open('./RF_output/RF_model.pkl', 'wb') as file:
         pickle.dump(classifier, file)
 
     # feature importance
@@ -122,12 +162,54 @@ def rf_model(features, target, n_model=500, tree_depth=10):
     ax2.boxplot(result.importances[perm_sorted_idx].T, vert=False,
                 labels=feature_names[perm_sorted_idx])
     fig.tight_layout()
-    plt.savefig('RF_importance.jpg', dpi=600)
+    plt.savefig('./RF_output/RF_importance.jpg', dpi=600)
+    plt.show()
+
+    # evaluating model
+    # y_train_pred = classifier.predict(X_train)  # predict by X_train
+    # y_test_pred = classifier.predict(X_test)  # predict by X_test
+
+    # cnf_matrix = confusion_matrix(y_train, y_train_pred)  # calculate the training set confusion matrix
+    # np.set_printoptions(precision=2)
+
+    # plt.figure(figsize=(20, 10))  # without normalization confusion matrix
+    # plot_confusion_matrix(cnf_matrix, classes=class_names, title='Training set')
+    # plt.savefig('./RF_output/train_matrix_{}.tiff'.format('RF'), dpi=600)
+    # plt.show()
+
+    # cutoff: predict the possible
+    y_test_score = classifier.predict_proba(X_test)
+
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+
+    # label 0
+    fpr[0], tpr[0], _ = roc_curve(y_test[:, 0], y_test_score[:, 0])
+    roc_auc[0] = auc(fpr[0], tpr[0])
+
+    # label 1
+    fpr[1], tpr[1], _ = roc_curve(y_test[:, 0], y_test_score[:, 1])
+    roc_auc[1] = auc(fpr[1], tpr[1])
+
+    # Plot of a ROC curve for a specific class
+    plt.figure()
+    lw = 2
+    plt.plot(fpr[1], tpr[1], color='red', lw=lw, label='ROC curve (area = {:.2f})'.format(roc_auc[1]))
+    plt.plot([0, 1], [0, 1], color='#00bc57', lw=lw, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC curve for test set')
+    plt.legend(loc="lower right")
     plt.show()
 
 
-parameter_optimization(features=features, target=target)
 rf_model(features=features, target=target)
+################################################
+
+
 # record time
 end_time = datetime.datetime.now()
 print('Start running，time：', end_time.strftime('%Y-%m-%d %H:%M:%S'))
