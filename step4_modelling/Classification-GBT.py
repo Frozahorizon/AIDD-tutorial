@@ -88,7 +88,7 @@ def parameter_optimization(features, target, m_scores=scores, parameter_grid=par
         print()
 
 
-parameter_optimization(features=features, target=target)
+# parameter_optimization(features=features, target=target)
 
 ################################################
 
