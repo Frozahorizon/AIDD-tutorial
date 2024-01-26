@@ -153,7 +153,7 @@ def svm_model_10fold(features_data, target_data, cost, kernel, ep):
     print(fold_scores.mean())
 
     scores_df = pd.DataFrame(fold_scores)
-    name = ['{0}'.format('RF')] * 10
+    name = ['{0}'.format('SVM')] * 10
     name_df = pd.DataFrame(name)
 
     MS = pd.concat([name_df, scores_df], axis=1)
