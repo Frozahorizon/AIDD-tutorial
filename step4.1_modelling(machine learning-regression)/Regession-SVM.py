@@ -7,21 +7,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import GridSearchCV
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.svm import SVR
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import r2_score
-from sklearn.model_selection import cross_val_score
 
 ################################################
 warnings.filterwarnings('ignore')
 # global variable
-max_depth = [5, 10, 20, 40]
-n_estimators = [200, 300, 500]
 
-param_grid = {'n_estimators': n_estimators,
-              'max_depth': max_depth}
+param_grid = {'kernel': ('linear', 'rbf'),
+              'C': [1, 10, 100],
+              'epsilon': [0.01, 0.1, 1]}
 
 optimization_scores = ['r2', 'neg_mean_squared_error']
 
@@ -34,7 +33,7 @@ features = pd.read_csv('../output_file/maccs.csv')
 target = pd.read_excel('../output_file/activity.xlsx')
 ################################################
 try:
-    os.makedirs('RF_output')
+    os.makedirs('SVR_output')
 except FileExistsError:
     pass
 
@@ -56,10 +55,9 @@ def partition(feature_data, target_data, test_ratio=0.3):
     return X_train, X_test, y_train, y_test
 
 
-def parameter_optimization(features, target, m_scores=optimization_scores, parameter_grid=param_grid):
-    X_train, X_test, y_train, y_test = partition(feature_data=features, target_data=target)
-    random_seed = np.random.RandomState(0)
-    base_estimator = RandomForestRegressor(random_state=random_seed)
+def parameter_optimization(features_data, target_data, m_scores=optimization_scores, parameter_grid=param_grid):
+    X_train, X_test, y_train, y_test = partition(feature_data=features_data, target_data=target_data)
+    base_estimator = SVR(gamma='scale')
     for score in m_scores:
         print("# Tuning hyper-parameters for {}".format(score))
         print()
@@ -79,34 +77,29 @@ def parameter_optimization(features, target, m_scores=optimization_scores, param
             print("%0.3f (+/-%0.03f) for %r" % (mean, std * 2, params))
 
 
-# parameter_optimization(features=features, target=target)
+# parameter_optimization(features_data=features, target_data=target)
 
 
 ################################################
-def rf_model(features, target, n_model=500, tree_depth=40):
+def svr_model(features_data, target_data, cost=10, kernel='rbf', ep=0.1):
+    print('using best parameter to train model')
     # Training model
-    X_train, X_test, y_train, y_test = partition(feature_data=features, target_data=target)
+    X_train, X_test, y_train, y_test = partition(feature_data=features_data, target_data=target_data)
 
     random_seed = np.random.RandomState(0)
 
-    regressor = RandomForestRegressor(n_estimators=n_model
-                                      , criterion='mse'
-                                      , max_depth=tree_depth
-                                      , min_samples_split=2
-                                      , min_samples_leaf=1
-                                      , min_weight_fraction_leaf=0.0
-                                      , max_features='auto'
-                                      , max_leaf_nodes=None
-                                      , min_impurity_decrease=0.0
-                                      , min_impurity_split=None
-                                      , bootstrap=True
-                                      , oob_score=False
-                                      , n_jobs=None
-                                      , random_state=random_seed
-                                      , verbose=0
-                                      , warm_start=False
-                                      , ccp_alpha=0.0
-                                      , max_samples=None)
+    regressor = SVR(kernel=kernel,
+                    degree=3,
+                    gamma='scale',
+                    coef0=0.0,
+                    tol=1e-3,
+                    C=cost,
+                    epsilon=ep,
+                    shrinking=True,
+                    cache_size=200,
+                    verbose=False,
+                    max_iter=-1)
+
     regressor.fit(X_train, y_train)
 
     y_train_pred = regressor.predict(X_train)
@@ -127,40 +120,31 @@ def rf_model(features, target, n_model=500, tree_depth=40):
     plt.ylabel('Predicted Values')
     plt.show()
 
-    with open('./RF_output/RF_model.pkl', 'wb') as file:
+    with open('./SVR_output/SVR_model.pkl', 'wb') as file:
         pickle.dump(regressor, file)
 
 
-# rf_model(features=features, target=target)
+svr_model(features_data=features, target_data=target)
 
 
 ################################################
 # 10-fold cross validation
-def rf_model_10fold(features_data, target_data, n_model=500, tree_depth=40):
-    print('Start 10 fold cross validation for random forest model')
+def svm_model_10fold(features_data, target_data, cost, kernel, ep):
+    print('Start 10 fold cross validation for support vector machine model')
     X = features_data  # using the cross validation do not set the training set and test set.
     y = target_data
 
-    random_seed = np.random.RandomState(0)  # setting the random seed
-
-    regressor = RandomForestRegressor(n_estimators=n_model
-                                      , criterion='mse'
-                                      , max_depth=tree_depth
-                                      , min_samples_split=2
-                                      , min_samples_leaf=1
-                                      , min_weight_fraction_leaf=0.0
-                                      , max_features='auto'
-                                      , max_leaf_nodes=None
-                                      , min_impurity_decrease=0.0
-                                      , min_impurity_split=None
-                                      , bootstrap=True
-                                      , oob_score=False
-                                      , n_jobs=None
-                                      , random_state=random_seed
-                                      , verbose=0
-                                      , warm_start=False
-                                      , ccp_alpha=0.0
-                                      , max_samples=None)
+    regressor = SVR(kernel=kernel,
+                    degree=3,
+                    gamma='scale',
+                    coef0=0.0,
+                    tol=1e-3,
+                    C=cost,
+                    epsilon=ep,
+                    shrinking=True,
+                    cache_size=200,
+                    verbose=False,
+                    max_iter=-1)
 
     regressor.fit(X, y)
     fold_scores = cross_val_score(regressor, X, y, cv=10, scoring='r2')
@@ -174,14 +158,15 @@ def rf_model_10fold(features_data, target_data, n_model=500, tree_depth=40):
 
     MS = pd.concat([name_df, scores_df], axis=1)
     MS.columns = ['Model', 'Scores']
-    MS.to_excel('./RF_output/RF_Scores.xlsx', index=False)
+    MS.to_excel('./SVR_output/SVR_Scores.xlsx', index=False)
 
     sns.boxplot(x='Model', y='Scores', color='#00b8e5', data=MS)
-    plt.savefig("./RF_output/boxplot.jpg", dpi=600)
+    plt.savefig("./SVR_output/boxplot.jpg", dpi=600)
     plt.show()
 
 
-rf_model_10fold(features_data=features, target_data=target)
+# svm_model_10fold(features_data=features, target_data=target, cost=10, kernel='rdf', ep=0.01)
+################################################
 # record time
 end_time = datetime.datetime.now()
 print('End running，time：', end_time.strftime('%Y-%m-%d %H:%M:%S'))
